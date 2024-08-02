@@ -39,9 +39,13 @@ func (model *Model) Send(command string) {
 
 	if token, ok := model.variables["token"]; ok {
 		lines := strings.Split(command, "\n")
-		lines = append([]string{lines[0]}, "Token="+token)
-		strings.Join(append(lines, lines[1:]...), "\n")
+		modifiedLines := append([]string{lines[0]}, "Token="+token)
+		if len(lines) > 1 {
+			modifiedLines = append(modifiedLines, lines[1:]...)
+		}
+		command = strings.Join(modifiedLines, "\n")
 	}
+	model.NewOutgoingBubble(command)
 
 	_, err := model.Connection.Write([]byte(command + "\r"))
 	if err != nil {
@@ -73,6 +77,7 @@ func (model *Model) Perform(command string, args ...string) error {
 		if err != nil {
 			model.NewErrorBubble(err.Error())
 		} else {
+			model.NewIncomingBubble(false, token)
 			model.variables["token"] = token
 		}
 	case "login":
@@ -81,6 +86,12 @@ func (model *Model) Perform(command string, args ...string) error {
 			break
 		}
 		model.Send(fmt.Sprintf("ACCOUNT login\nId=%s\n\n%s", args[0], args[1]))
+	case "echo":
+		if len(args) == 0 {
+			model.NewErrorBubble("/echo [variable]")
+			break
+		}
+		model.NewIncomingBubble(false, model.variables[args[0]])
 	case "quit", "q":
 		model.shouldQuit = true
 	default:
@@ -114,9 +125,9 @@ func (model *Model) HandleInput(key string) {
 		}
 	case "enter":
 		command := strings.TrimSpace(model.InputArr[model.InputCurrent])
-		model.NewOutgoingBubble(command)
 		switch strings.HasPrefix(command, "/") {
 		case true:
+			model.NewOutgoingBubble(command)
 			var err error
 			parts := strings.Split(command[1:], " ")
 			if len(parts) == 1 {
